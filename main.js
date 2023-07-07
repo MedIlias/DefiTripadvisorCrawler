@@ -1,6 +1,73 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const wget = require('node-wget');
+const { parse } = require('node-html-parser');
 const fs = require('fs');
+
+
+const listSelector = 'div[data-test-target="restaurants-list"] > div > div > div > div > div > div > div > a';
+const nameSelector = 'h1[data-test-target="top-info-header"]';
+const phoneSelector = 'span[data-test-target="restaurant-detail-info-phone"]';
+
+
+const headers = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.61 Safari/537.36',
+  'Referer': 'https://www.tripadvisor.be/'
+};
+
+
+
+
+
+function getRestaurantInfo(html) {
+  const root = parse(html);
+
+  const name = root.querySelector(nameSelector).textContent.trim();
+  const phone = root.querySelector(phoneSelector).textContent.trim();
+
+  return { name, phone };
+}
+
+async function scrapeList(url) {
+  try {
+    const response = await axios.get(url, { headers });
+    const html = response.data;
+    const root = parse(html);
+
+    const restaurantUrls = root.querySelectorAll(listSelector)
+      .map((element) => element.getAttribute('href'));
+
+    const restaurantPromises = restaurantUrls.map(async (restaurantUrl) => {
+      const absoluteUrl = `https://www.tripadvisor.be${restaurantUrl}`;
+      const response = await axios.get(absoluteUrl);
+      const restaurantHtml = response.data;
+      return getRestaurantInfo(restaurantHtml);
+    });
+
+    return Promise.all(restaurantPromises);
+  } catch (error) {
+    throw error;
+  }
+}
+
+scrapeList("https://fr.tripadvisor.be/Restaurants-g188646-Charleroi_Hainaut_Province_Wallonia.html")
+  .then((output) => {
+    const timestamp = new Date().toISOString().replace(/[-:.]/g, '');
+    const fileName = `${timestamp}.json`;
+    const jsonData = JSON.stringify(output);
+
+    fs.writeFile(fileName, jsonData, 'utf8', (err) => {
+      if (err) {
+        console.error('Error writing to file:', err);
+      } else {
+        console.log(`Data saved to ${fileName}`);
+      }
+    });
+  })
+  .catch((err) => {
+    console.error('Error scraping data:', err);
+  });
+
 
 
 
@@ -80,11 +147,10 @@ main()
 
 
 
-const listSelector = 'div[data-test-target="restaurants-list"] > div > div > div > div > div > div > div > a';
-const nameSelector = 'h1[data-test-target="top-info-header"]';
-const phoneSelector = 'span[data-test-target="restaurant-detail-info-phone"]';
 
 
+
+/*
 
 async function getRestaurantInfo(url) {
   const response = await axios.get(url);
@@ -138,7 +204,7 @@ scrapeList(listUrl)
     console.error('Error scraping data:', err);
   });
 
-
+*/
 
 
 
